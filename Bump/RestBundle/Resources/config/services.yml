@@ -1,0 +1,48 @@
+parameters:
+    fos_rest.view_handler.jsonp.class: Bump\RestBundle\View\JsonpHandler
+    bump_api.cache.service.class: Bump\RestBundle\Http\Service\Cache
+    bump_rest.kernel_view.class: Bump\RestBundle\EventListener\ViewListener
+
+    # bump_api.settings.class: Bump\RestBundle\Library\SettingsService
+    # bump_api.on_flush.class: Bump\RestBundle\EventListener\Doctrine\OnFlushListener
+
+
+services:
+    ##Exampe of use
+    # bump_api.settings:
+    #     class: %bump_api.settings.class%
+    #     arguments:
+    #         - "@doctrine.orm.default_entity_manager"
+    #         - "@liip_doctrine_cache.ns.settings"
+    #         - "BumpRestBundle:Setting"
+    #     tags:
+    #         - { name: kernel.event_listener, event: setting.modified, method: onSettingModified }
+    #
+    # bump_api.on_flush:
+    #     class: %bump_api.on_flush.class%
+    #     public: false
+    #     tags:
+    #         - {name: doctrine.event_listener, event: onFlush}
+    bump_api.http_cache:
+        class: %bump_api.cache.service.class%
+        arguments:
+            - "@service_container"
+            - "@fos_rest.view_handler"
+
+    kernel.listener.response_listener:
+        class: Bump\RestBundle\EventListener\ResponseListener
+        arguments:
+             - "@service_container"
+        tags:
+            - { name: kernel.event_listener, event: kernel.response, method: onKernelResponse}
+
+    kernel.listener.request_listener:
+        class: Bump\RestBundle\EventListener\RequestListener
+        arguments:
+             - "@service_container"
+        tags:
+            - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest }
+
+    bump_api.encryptor:
+        class: Bump\RestBundle\Library\Encryptor
+        arguments: [%secret%]
