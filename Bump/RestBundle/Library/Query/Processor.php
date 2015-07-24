@@ -424,6 +424,15 @@ class Processor
 
         $metadata = $this->getMetadata();
         $associationMapping = $metadata->getAssociationMappings();
+        $associationMappingByColumns = array();
+        foreach ($associationMapping as $meta) {
+            if (!isset($meta['joinColumns'])) {
+                continue;
+            }
+            $joinColumns = reset($meta['joinColumns']);
+            $associationMappingByColumns[$joinColumns['name']] = $meta['fieldName'];
+        }
+
         $groups = $filters;
         $result = array();
         $operations = self::getOperationsList();
@@ -448,11 +457,15 @@ class Processor
                         throw new InvalidFilter("Invalid Filter Parameter, expected 'v' (value) property.");
                     }
                 }
-
                 $field = $this->getFieldName($filter['f'], true);
                 if (!$field) {
                     if (isset($associationMapping[$filter['f']])) {
                         $field = $filter['f'];
+                        $assoc = true;
+                    }elseif(isset($associationMappingByColumns[$filter['f']])) {
+                        $field = $associationMappingByColumns[$filter['f']];
+                        $assoc = true;
+                        $filter['f'] = $field;
                     } else {
                         if (false === strpos($filter['f'], '.')) {
                             $field = $this->getAssocFieldName($filter['f']);
