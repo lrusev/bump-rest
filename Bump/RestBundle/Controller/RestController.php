@@ -209,7 +209,7 @@ abstract class RestController extends FOSRestController
     /**
      * Delete multiple entity
      */
-    protected function handleDeleteBulk($ids, $idSeparator = ',', $message = null)
+    protected function handleDeleteBulk($ids, $idSeparator = ',', $message = null, \Closure $callback = null)
     {
         $ids = explode($idSeparator, $ids);
         if (empty($ids)) {
@@ -217,14 +217,17 @@ abstract class RestController extends FOSRestController
         }
 
         $processor = new Query\Processor($this->getRepository(), $this->getCollectionAlias());
-        $entities = $processor->whereIn($ids);
-
+        $processor->whereIn($ids);
         $em = $this->getDoctrine()->getManager();
         $batchSize = 20;
         $i = 0;
         $q = $processor->qb()->getQuery();
         $iterableResult = $q->iterate();
         while (($row = $iterableResult->next()) !== false) {
+            if (!is_null($callback)) {
+                $callback($row[0], $processor, $this);
+            }
+
             $em->remove($row[0]);
             if (($i % $batchSize) == 0) {
                 $em->flush(); // Executes all deletions.
