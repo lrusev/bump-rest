@@ -3,7 +3,7 @@
 namespace Bump\RestBundle\Library;
 
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Gedmo\Uploadable\FileInfo\FileInfoInterface;
 use Symfony\Component\Routing\RequestContext as Context;
 use Hateoas\Configuration\Metadata\ClassMetadataInterface;
 use Hateoas\Configuration\Relation;
@@ -34,7 +34,7 @@ trait SingleImageUploadable
         }
 
         $asset = $this->getAsset();
-        if (!($asset instanceof UploadedFile)) {
+        if (!($asset instanceof FileInfoInterface)) {
             return;
         }
 
