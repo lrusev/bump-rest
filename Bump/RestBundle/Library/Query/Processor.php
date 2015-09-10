@@ -105,7 +105,6 @@ class Processor
         $alias = $this->getQueryAlias();
         $expressions = array();
         $iterrationIndex = 0;
-
         foreach ($filters as $filter) {
             $iterrationIndex++;
 
@@ -147,6 +146,7 @@ class Processor
                     } else {
                         $meta = $this->getAssocFieldName($field, $meta, true);
                     }
+
                     if (!$meta) {
                         throw new InvalidFilter("Invalid field '{$parentAlias}.{$field}' presented in filters.");
                     }
@@ -167,15 +167,16 @@ class Processor
                         );
                         $join = reset($joined);
                     }
-                    if (empty($join)) {
-                        if (isset($meta['sourceToTargetKeyColumns'])) {
-                            $sourceToTargetKeyColumns = reset($meta['sourceToTargetKeyColumns']);
-                        } elseif (isset($meta['relationToTargetKeyColumns'])) {
-                            $sourceToTargetKeyColumns = reset($meta['relationToTargetKeyColumns']);
-                        } else {
-                            throw new InvalidFilter("Invalid filter '{$parentAlias}.{$field}' presented in filters.");
-                        }
 
+                    if (isset($meta['sourceToTargetKeyColumns'])) {
+                        $sourceToTargetKeyColumns = reset($meta['sourceToTargetKeyColumns']);
+                    } elseif (isset($meta['relationToTargetKeyColumns'])) {
+                        $sourceToTargetKeyColumns = reset($meta['relationToTargetKeyColumns']);
+                    } else {
+                        throw new InvalidFilter("Invalid filter '{$parentAlias}.{$field}' presented in filters.");
+                    }
+
+                    if (empty($join)) {
                         if (isset($meta['fallbackJoin']) && isset($meta['targetToSourceKeyColumns'])) {
                             $paramName = "{$joinAlias}{$meta['fallbackField']['field']}{$iterrationIndex}";
 
@@ -191,32 +192,50 @@ class Processor
                         }
 
                         if ($last) {
+                            $paramName = "{$joinAlias}{$field}{$iterrationIndex}";
                             switch ($operation) {
                                 case self::OPERATION_START:
-                                    $value = strtolower($value);
-                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias, 'WITH', $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$joinAlias}"));
-                                    $qb->setParameter($joinAlias, "{$value}%");
+                                    $value = strtolower($value)."%";
+                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias);
+                                    $expressions[] = $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$paramName}");
                                     break;
                                 case self::OPERATION_END:
-                                    $value = strtolower($value);
-                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias, 'WITH', $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$joinAlias}"));
-                                    $qb->setParameter($joinAlias, "%{$value}");
+                                    $value = "%".strtolower($value);
+                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias);
+                                    $expressions[] = $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$paramName}");
                                     break;
                                 case self::OPERATION_LIKE:
-                                    $value = strtolower($value);
-                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias, 'WITH', $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$joinAlias}"));
-                                    $qb->setParameter($joinAlias, "%{$value}%");
+                                    $value = "%".strtolower($value)."%";
+                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias);
+                                    $expressions[] = $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$paramName}");
                                     break;
                                 default:
-                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias, 'WITH', "{$joinAlias}.{$sourceToTargetKeyColumns}=:{$joinAlias}");
-                                    $qb->setParameter($joinAlias, $value);
+                                    $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias);
+                                    $expressions[] = $qb->expr()->eq("{$joinAlias}.{$sourceToTargetKeyColumns}", ":{$paramName}");
                             }
+
+                            $qb->setParameter($paramName, $value);
                         } else {
                             $qb->innerJoin("{$parentAlias}.{$field}", $joinAlias);
                         }
                     } elseif ($last) {
                         $paramName = "{$joinAlias}{$field}{$iterrationIndex}";
-                        $expressions[] = $qb->expr()->eq("{$parentAlias}.{$field}", ":{$paramName}");
+                        switch ($operation) {
+                            case self::OPERATION_START:
+                                $value = strtolower($value)."%";
+                                $expressions[] = $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$paramName}");
+                                break;
+                            case self::OPERATION_END:
+                                $value = "%".strtolower($value);
+                                $expressions[] = $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$paramName}");
+                                break;
+                            case self::OPERATION_LIKE:
+                                $value = "%".strtolower($value)."%";
+                                $expressions[] = $qb->expr()->like("LOWER({$joinAlias}.{$sourceToTargetKeyColumns})", ":{$paramName}");
+                                break;
+                            default:
+                                $expressions[] = $qb->expr()->eq("{$joinAlias}.{$sourceToTargetKeyColumns}", ":{$paramName}");
+                        }
                         $qb->setParameter($paramName, $value);
                     }
                 }
@@ -237,9 +256,10 @@ class Processor
             }
         }
 
-        // print_r($qb->getQuery()->getSQL());
-        // print_r($qb->getParameters());
-        // exit;
+        /*print_r($qb->getQuery()->getSQL());
+        var_dump($qb->getParameters());
+        var_dump($expressions);
+        die;*/
 
         return $this;
     }
@@ -286,6 +306,7 @@ class Processor
                 if (!in_array($operation, array(self::OPERATION_LIKE, self::OPERATION_START, self::OPERATION_END))) {
                     throw new InvalidFilter("Operator '{$operation}' doesn not support for field '{$field}'.");
                 }
+
                 $value = strtolower($value);
                 if ($platform instanceof PostgreSqlPlatform) {
                     $expression = $qb->expr()->like("CAST({$alias}.{$field} AS {$textUnit})", ":{$field}{$uniqueId}");
@@ -323,6 +344,9 @@ class Processor
                         break;
                     case self::OPERATION_END:
                         $qb->setParameter("{$field}{$uniqueId}", "%{$value}");
+                        break;
+                    case self::OPERATION_LIKE:
+                        $qb->setParameter("{$field}{$uniqueId}", "%{$value}%");
                         break;
                     default:
                         $qb->setParameter("{$field}{$uniqueId}", $value);
@@ -439,6 +463,10 @@ class Processor
         for ($i = 0; $i<count($groups); $i++) {
             $assoc = false;
             $normalized = array();
+            /*if (isset($groups[$i])) {
+                throw new InvalidFilter("Invalid filter group");
+            }*/
+
             $group = $groups[$i];
             if (!isset($group['filters'])) {
                 throw new InvalidFilter("Invalid Filter group format, expected 'filters' property.");
@@ -462,11 +490,13 @@ class Processor
                     if (isset($associationMapping[$filter['f']])) {
                         $field = $filter['f'];
                         $assoc = true;
-                    }elseif(isset($associationMappingByColumns[$filter['f']])) {
+                    } elseif (isset($associationMappingByColumns[$filter['f']])) {
                         $field = $associationMappingByColumns[$filter['f']];
                         $assoc = true;
                         $filter['f'] = $field;
                     } else {
+                        $fields = array();
+
                         if (false === strpos($filter['f'], '.')) {
                             $field = $this->getAssocFieldName($filter['f']);
                             if (!$field) {
@@ -495,7 +525,6 @@ class Processor
                                 throw new InvalidFilter($e->getMessage());
                             }
 
-                            $fields = array();
                             foreach ($stack as $field => $meta) {
                                 if (isset($meta['targetEntity'])) {
                                     $fields[] = $field;
@@ -510,6 +539,7 @@ class Processor
                             $assoc = true;
                             $filter['f'] = $fields;
                         }
+
                     }
                 }
 
