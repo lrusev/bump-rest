@@ -34,7 +34,7 @@ trait SingleImageUploadable
         }
 
         $asset = $this->getAsset();
-        if (!($asset instanceof FileInfoInterface)) {
+        if (!($asset instanceof FileInfoInterface) && !($asset instanceof \SplFileInfo)) {
             return;
         }
 
