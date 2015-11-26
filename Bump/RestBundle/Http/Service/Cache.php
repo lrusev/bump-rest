@@ -70,7 +70,8 @@ class Cache
             $response->setPrivate();
         }
         
-        if ($response->getMaxAge() === 0) {
+        $current = $response->getMaxAge();
+        if (empty($current)) {
             $response->setMaxAge($maxAge);   
         }
 
