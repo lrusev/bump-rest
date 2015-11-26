@@ -37,7 +37,7 @@ class Cache
         return $this->handleResponse($response, $public);
     }
 
-    public function handleResponse(Response $response, $public = false, $lastModified = null)
+    public function handleResponse(Response $response, $public = false, $lastModified = null, $maxAge = 0)
     {
         if (!$response->isSuccessful()) {
             return $response;
@@ -68,6 +68,10 @@ class Cache
             $response->setPublic();
         } else {
             $response->setPrivate();
+        }
+        
+        if ($response->getMaxAge() === 0) {
+            $response->setMaxAge($maxAge);   
         }
 
         if (is_null($lastModified)) {
